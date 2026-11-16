@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">CutForge</string>
+    <string name="studio_tagline">NLE STUDIO • UNIVERSAL PLAYER</string>
+    <string name="new_project">New Project</string>
+    <string name="import_media">Import Clips</string>
+    <string name="load_demo_footage">Reference Reel</string>
+    <string name="export_video">Export</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="duplicate">Duplicate</string>
+    <string name="rename">Rename</string>
+    <string name="empty_vault_title">Project Bin Empty</string>
+    <string name="empty_vault_subtitle">Create a timeline from local clips or open a reference sequence.</string>
+</resources>

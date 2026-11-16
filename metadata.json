@@ -1,0 +1,6 @@
+{
+  "name": "CutForge",
+  "description": "Offline pro-grade multi-track video editor with hardware-accelerated Media3 effects, color grading LUTs, speed ramps, waveform audio mixing, and watermark-free MP4 export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
