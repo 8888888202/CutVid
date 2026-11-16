@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +31,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,8 +54,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,7 +70,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -102,7 +101,10 @@ import com.example.data.model.AspectRatioPreset
 import com.example.data.model.ExportResolution
 import com.example.data.model.VideoProject
 import com.example.media.TimecodeFormatter
+import com.example.ui.components.AspectRatioWireframeIcon
 import com.example.ui.components.ExportsVaultPane
+import com.example.ui.components.StudioOptionPill
+import com.example.ui.components.StudioTogglePill
 import com.example.ui.theme.LocalStudioPalette
 import com.example.ui.theme.TimecodeTextStyle
 import com.example.ui.viewmodel.StudioTemplate
@@ -239,40 +241,44 @@ fun VaultScreen(
             },
             bottomBar = {
                 if (!useNavRail) {
-                    NavigationBar(
-                        containerColor = palette.studioSlate,
-                        contentColor = palette.textPrimary
-                    ) {
-                        VaultTab.entries.forEach { tab ->
-                            val selected = activeTab == tab
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    if (tab == VaultTab.PLAYER) {
-                                        onOpenPlayer(null)
-                                    } else {
-                                        activeTab = tab
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = when (tab) {
-                                            VaultTab.PROJECTS -> Icons.Default.VideoLibrary
-                                            VaultTab.PLAYER -> Icons.Default.SmartDisplay
-                                            VaultTab.EXPORTS -> Icons.Default.FolderCopy
-                                        },
-                                        contentDescription = tab.label
+                    Column {
+                        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(palette.hairlineBorder))
+                        NavigationBar(
+                            containerColor = palette.studioSlate,
+                            contentColor = palette.textPrimary,
+                            tonalElevation = 0.dp
+                        ) {
+                            VaultTab.entries.forEach { tab ->
+                                val selected = activeTab == tab
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = {
+                                        if (tab == VaultTab.PLAYER) {
+                                            onOpenPlayer(null)
+                                        } else {
+                                            activeTab = tab
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = when (tab) {
+                                                VaultTab.PROJECTS -> Icons.Default.VideoLibrary
+                                                VaultTab.PLAYER -> Icons.Default.SmartDisplay
+                                                VaultTab.EXPORTS -> Icons.Default.FolderCopy
+                                            },
+                                            contentDescription = tab.label
+                                        )
+                                    },
+                                    label = { Text(tab.label, fontSize = 11.sp) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = palette.playheadCyan,
+                                        selectedTextColor = palette.playheadCyan,
+                                        indicatorColor = palette.cyanMuted,
+                                        unselectedIconColor = palette.textSecondary,
+                                        unselectedTextColor = palette.textSecondary
                                     )
-                                },
-                                label = { Text(tab.label) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = palette.playheadCyan,
-                                    selectedTextColor = palette.playheadCyan,
-                                    indicatorColor = palette.cyanMuted,
-                                    unselectedIconColor = palette.textSecondary,
-                                    unselectedTextColor = palette.textSecondary
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -356,7 +362,7 @@ fun VaultScreen(
 
                                 item(span = { GridItemSpan(columns) }) {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Sequence Presets", style = MaterialTheme.typography.titleSmall, color = palette.textSecondary)
+                                        Text("Quick Formats", style = MaterialTheme.typography.titleSmall, color = palette.textSecondary)
                                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             items(StudioTemplate.entries) { template ->
                                                 TemplateCard(
@@ -465,10 +471,10 @@ fun VaultScreen(
                     Text("Aspect Ratio", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(AspectRatioPreset.entries) { ratio ->
-                            FilterChip(
+                            StudioOptionPill(
+                                label = "${ratio.label} (${ratio.subtitle})",
                                 selected = pendingRatio == ratio,
-                                onClick = { pendingRatio = ratio },
-                                label = { Text("${ratio.label} (${ratio.subtitle})", fontSize = 11.sp) }
+                                onClick = { pendingRatio = ratio }
                             )
                         }
                     }
@@ -572,7 +578,7 @@ private fun StudioConsoleDeck(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "WORKSTATION // MEDIA ENGINE",
+                    text = "NLE WORKBENCH",
                     style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 )
                 Text(
@@ -587,12 +593,12 @@ private fun StudioConsoleDeck(
                     enabled = !isBusy,
                     colors = ButtonDefaults.buttonColors(containerColor = palette.playheadCyan, contentColor = palette.voidBg),
                     shape = RoundedCornerShape(4.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                    modifier = Modifier.weight(1.1f).height(46.dp).testTag("new_project_button")
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    modifier = Modifier.weight(1.15f).height(44.dp).testTag("new_project_button")
                 ) {
                     Icon(Icons.Default.Add, null, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("New Cut", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+                    Spacer(Modifier.width(6.dp))
+                    Text("New Cut", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 }
 
                 OutlinedButton(
@@ -600,24 +606,24 @@ private fun StudioConsoleDeck(
                     enabled = !isBusy,
                     shape = RoundedCornerShape(4.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp),
-                    modifier = Modifier.weight(1f).height(46.dp).testTag("open_universal_player_button")
+                    modifier = Modifier.weight(1f).height(44.dp).testTag("open_universal_player_button")
                 ) {
                     Icon(Icons.Default.FolderOpen, null, tint = palette.textPrimary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Play File", color = palette.textPrimary, fontSize = 12.sp, maxLines = 1)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Play Media", color = palette.textPrimary, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 }
+            }
 
-                OutlinedButton(
-                    onClick = onTrySampleReel,
-                    enabled = !isBusy,
-                    shape = RoundedCornerShape(4.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                    modifier = Modifier.weight(0.95f).height(46.dp).testTag("try_sample_reel_button")
-                ) {
-                    Icon(Icons.Default.PlayCircleOutline, null, tint = palette.audioAmber, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Demo Cut", color = palette.audioAmber, fontSize = 12.sp, maxLines = 1)
-                }
+            OutlinedButton(
+                onClick = onTrySampleReel,
+                enabled = !isBusy,
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp).testTag("try_sample_reel_button")
+            ) {
+                Icon(Icons.Default.PlayCircleOutline, null, tint = palette.audioAmber, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Load Offline Reference Demo Cut", color = palette.audioAmber, fontSize = 12.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -633,17 +639,27 @@ private fun TemplateCard(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(4.dp),
         color = palette.panelSurface,
         modifier = Modifier
-            .width(150.dp)
-            .border(1.dp, palette.hairlineBorder, RoundedCornerShape(6.dp))
+            .width(164.dp)
+            .border(0.75.dp, palette.hairlineBorder, RoundedCornerShape(4.dp))
             .testTag("template_${template.name.lowercase()}")
     ) {
-        Column(modifier = Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(template.ratio.label, style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 10.sp))
-            Text(template.title, style = MaterialTheme.typography.titleSmall, color = palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(template.subtitle, style = MaterialTheme.typography.bodySmall, color = palette.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(
+            modifier = Modifier.padding(11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            AspectRatioWireframeIcon(
+                floatRatio = template.ratio.floatRatio,
+                tint = palette.playheadCyan
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+                Text(template.ratio.label, style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                Text(template.title, style = MaterialTheme.typography.titleSmall, color = palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(template.subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = palette.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -661,28 +677,47 @@ private fun ProjectVaultCard(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(4.dp),
         color = palette.panelSurface,
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, palette.hairlineBorder, RoundedCornerShape(6.dp))
+            .border(0.75.dp, palette.hairlineBorder, RoundedCornerShape(4.dp))
             .testTag("project_card_${project.id}")
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(width = 86.dp, height = 58.dp).clip(RoundedCornerShape(4.dp)).background(palette.elevatedTrack),
+                modifier = Modifier
+                    .size(width = 92.dp, height = 60.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(palette.elevatedTrack)
+                    .border(0.5.dp, palette.hairlineBorder, RoundedCornerShape(4.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val thumbFile = project.thumbnailPath?.let { File(it) }
                 if (thumbFile != null && thumbFile.exists()) {
                     AsyncImage(model = thumbFile, contentDescription = project.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
-                    Icon(Icons.Default.VideoLibrary, null, tint = palette.textMuted, modifier = Modifier.size(24.dp))
+                    AspectRatioWireframeIcon(floatRatio = project.aspectRatio.floatRatio, tint = palette.textMuted)
                 }
                 Box(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).clip(RoundedCornerShape(3.dp)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 4.dp, vertical = 1.dp)
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(palette.voidBg.copy(alpha = 0.85f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
                 ) {
-                    Text(TimecodeFormatter.formatDurationShort(project.totalDurationMs), style = TimecodeTextStyle.copy(fontSize = 9.sp, color = Color.White))
+                    Text(project.aspectRatio.label, style = TimecodeTextStyle.copy(fontSize = 8.sp, color = palette.playheadCyan))
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.Black.copy(alpha = 0.82f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(TimecodeFormatter.formatDurationShort(project.totalDurationMs), style = TimecodeTextStyle.copy(fontSize = 8.sp, color = Color.White))
                 }
             }
 
@@ -690,16 +725,19 @@ private fun ProjectVaultCard(
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(project.title, style = MaterialTheme.typography.titleMedium, color = palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(project.aspectRatio.label, style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 10.sp))
-                    Text("${project.clips.size} clips • ${project.textOverlays.size + project.stickers.size} layers", style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
-                }
+                Text(
+                    text = "${project.clips.size} clips • ${project.textOverlays.size + project.stickers.size} layers • ${project.exportSettings.resolution.label}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 val dateStr = remember(project.updatedAt) { SimpleDateFormat("MMM d, HH:mm", Locale.US).format(Date(project.updatedAt)) }
                 Text("Modified $dateStr", style = TimecodeTextStyle.copy(color = palette.textMuted, fontSize = 9.sp))
             }
 
             Box {
-                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.minimumInteractiveComponentSize()) {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Default.MoreVert, "Project options", tint = palette.textSecondary)
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -716,12 +754,12 @@ private fun ProjectVaultCard(
 private fun EmptyVaultCard(hasProjects: Boolean, onNewProject: () -> Unit, onTrySample: () -> Unit) {
     val palette = LocalStudioPalette.current
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(4.dp),
         color = palette.panelSurface,
-        modifier = Modifier.fillMaxWidth().border(1.dp, palette.hairlineBorder, RoundedCornerShape(6.dp))
+        modifier = Modifier.fillMaxWidth().border(0.75.dp, palette.hairlineBorder, RoundedCornerShape(4.dp))
     ) {
         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Default.VideoLibrary, null, tint = palette.playheadCyan, modifier = Modifier.size(32.dp))
+            Icon(Icons.Default.VideoLibrary, null, tint = palette.playheadCyan, modifier = Modifier.size(30.dp))
             Text(if (hasProjects) "No Matching Projects" else stringResource(R.string.empty_vault_title), style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
             Text(if (hasProjects) "Try another filter." else stringResource(R.string.empty_vault_subtitle), style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
             if (!hasProjects) {
@@ -749,20 +787,29 @@ private fun StudioSettingsSheet(
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Studio Preferences", style = MaterialTheme.typography.headlineSmall)
             Text("Default Export Resolution", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 ExportResolution.entries.forEach { res ->
-                    FilterChip(
+                    StudioOptionPill(
+                        label = res.label,
                         selected = settings.defaultResolution == res,
-                        onClick = { onResolutionChange(res) },
-                        label = { Text(res.label) },
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = palette.cyanMuted, selectedLabelColor = palette.playheadCyan)
+                        onClick = { onResolutionChange(res) }
                     )
                 }
             }
             Text("Default Frame Rate", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 listOf(24, 30, 60).forEach { fps ->
-                    FilterChip(selected = settings.defaultFps == fps, onClick = { onFpsChange(fps) }, label = { Text("${fps}fps") })
+                    StudioOptionPill(
+                        label = "${fps}fps",
+                        selected = settings.defaultFps == fps,
+                        onClick = { onFpsChange(fps) }
+                    )
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -770,14 +817,22 @@ private fun StudioSettingsSheet(
                     Text("Rule-of-Thirds Safe Guides", style = MaterialTheme.typography.titleSmall)
                     Text("Show framing grid on monitor stage", style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
                 }
-                Switch(checked = settings.showSafeZoneGuides, onCheckedChange = onSafeZoneToggle)
+                StudioTogglePill(
+                    label = if (settings.showSafeZoneGuides) "ON" else "OFF",
+                    checked = settings.showSafeZoneGuides,
+                    onCheckedChange = onSafeZoneToggle
+                )
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Magnetic Timeline Snap", style = MaterialTheme.typography.titleSmall)
                     Text("Snap cuts and beat pins while scrubbing", style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
                 }
-                Switch(checked = settings.magneticSnapEnabled, onCheckedChange = onMagneticSnapToggle)
+                StudioTogglePill(
+                    label = if (settings.magneticSnapEnabled) "ON" else "OFF",
+                    checked = settings.magneticSnapEnabled,
+                    onCheckedChange = onMagneticSnapToggle
+                )
             }
             Spacer(Modifier.height(10.dp))
         }

@@ -141,13 +141,6 @@ fun ExportsVaultPane(
                     }
 
                     IconButton(
-                        onClick = { onPlayExport(item) },
-                        modifier = Modifier.minimumInteractiveComponentSize()
-                    ) {
-                        Icon(Icons.Default.PlayArrow, "Play in Pro Player", tint = palette.playheadCyan)
-                    }
-
-                    IconButton(
                         onClick = {
                             val share = Intent(Intent.ACTION_SEND).apply {
                                 type = "video/mp4"

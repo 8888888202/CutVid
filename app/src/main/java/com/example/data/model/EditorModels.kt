@@ -31,12 +31,12 @@ enum class ColorPreset(
     val vignette: Float
 ) {
     NONE("Original", 0f, 0f, 0f, 0f, 0f),
-    TEAL_ORANGE("Cinema Teal", -0.02f, 0.22f, 0.18f, -0.06f, 0.28f),
-    KODAK_WARM("Kodak Gold", 0.04f, 0.14f, 0.12f, 0.24f, 0.18f),
+    TEAL_ORANGE("Teal & Orange", -0.02f, 0.22f, 0.18f, -0.06f, 0.28f),
+    KODAK_WARM("Film 2383", 0.04f, 0.14f, 0.12f, 0.24f, 0.18f),
     NOIR_BW("Silver Noir", 0.0f, 0.34f, -1.0f, 0.0f, 0.35f),
-    CYBER_NEON("Cyber Neon", 0.02f, 0.28f, 0.42f, -0.18f, 0.20f),
-    VIVID_POP("Vivid Pop", 0.05f, 0.16f, 0.34f, 0.04f, 0.0f),
-    PASTEL_MATTE("Pastel Matte", 0.08f, -0.14f, -0.16f, 0.08f, 0.08f)
+    CYBER_NEON("Cool Chrome", 0.02f, 0.24f, 0.22f, -0.18f, 0.20f),
+    VIVID_POP("Punch Clean", 0.04f, 0.16f, 0.28f, 0.04f, 0.0f),
+    PASTEL_MATTE("Fade Matte", 0.08f, -0.14f, -0.16f, 0.08f, 0.08f)
 }
 
 @Serializable
@@ -106,12 +106,12 @@ enum class TextAnimation(val label: String) {
 
 @Serializable
 enum class BadgeStickerType(val label: String, val badgeText: String, val accentArgb: Long) {
-    IMAGE_PIP("Photo PiP", "PIP", 0xFF00E5FF),
-    REC_INDICATOR("REC ●", "● REC", 0xFFFF4D6D),
-    RAW_4K("4K MASTER", "4K • 60FPS", 0xFFFFB300),
-    CINEMA_TAG("PRO CUT", "CINEMA CUT", 0xFF00E5FF),
-    FOCUS_FRAME("VIEWFINDER", "[ + ]", 0xFFFFFFFF),
-    FOLLOW_CTA("FOLLOW", "FOLLOW +", 0xFF10B981)
+    IMAGE_PIP("Photo PiP", "PIP", 0xFF3A9DF6),
+    REC_INDICATOR("REC Mark", "● REC", 0xFFDC4A54),
+    RAW_4K("4K 60fps", "4K • 60FPS", 0xFFDE9235),
+    CINEMA_TAG("Master Cut", "MASTER CUT", 0xFF3A9DF6),
+    FOCUS_FRAME("Viewfinder", "[ + ]", 0xFFF0F2F5),
+    FOLLOW_CTA("Subscribe", "SUBSCRIBE", 0xFF2FB373)
 }
 
 @Serializable
@@ -249,7 +249,7 @@ data class VideoProject(
     val updatedAt: Long = System.currentTimeMillis(),
     val aspectRatio: AspectRatioPreset = AspectRatioPreset.RATIO_9_16,
     val canvasFillStyle: CanvasFillStyle = CanvasFillStyle.OBSIDIAN,
-    val canvasBgArgb: Long = 0xFF0B0D12,
+    val canvasBgArgb: Long = 0xFF0E0F11,
     val clips: List<VideoClip> = emptyList(),
     val textOverlays: List<TextOverlayItem> = emptyList(),
     val stickers: List<OverlayStickerItem> = emptyList(),

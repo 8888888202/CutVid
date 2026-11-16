@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -24,8 +27,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -48,9 +49,13 @@ import com.example.data.model.ExportCodec
 import com.example.data.model.ExportResolution
 import com.example.data.model.VideoProject
 import com.example.media.ExportUiState
+import com.example.media.Media3EffectFactory
 import com.example.media.TimecodeFormatter
 import com.example.ui.theme.LocalStudioPalette
 import com.example.ui.theme.TimecodeTextStyle
+
+import java.io.File
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +65,7 @@ fun ExportSheet(
     onUpdateSettings: (ExportResolution?, Int?, ExportCodec?, BitrateTier?) -> Unit,
     onStartExport: () -> Unit,
     onCancelExport: () -> Unit,
+    onPlayExportedFile: (File) -> Unit,
     onDismiss: () -> Unit
 ) {
     val palette = LocalStudioPalette.current
@@ -79,6 +85,7 @@ fun ExportSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -114,53 +121,75 @@ fun ExportSheet(
             when (exportState) {
                 is ExportUiState.Idle -> {
                     Text("Resolution", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         ExportResolution.entries.forEach { res ->
-                            FilterChip(
+                            StudioOptionPill(
+                                label = res.label,
                                 selected = project.exportSettings.resolution == res,
-                                onClick = { onUpdateSettings(res, null, null, null) },
-                                label = { Text(res.label, fontSize = 12.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = palette.cyanMuted,
-                                    selectedLabelColor = palette.playheadCyan
-                                )
+                                onClick = { onUpdateSettings(res, null, null, null) }
                             )
                         }
                     }
 
                     Text("Frame Rate & Codec", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(24, 30, 60).forEach { fps ->
-                            FilterChip(
+                            StudioOptionPill(
+                                label = "${fps}fps",
                                 selected = project.exportSettings.fps == fps,
-                                onClick = { onUpdateSettings(null, fps, null, null) },
-                                label = { Text("${fps}fps", fontSize = 12.sp) }
+                                onClick = { onUpdateSettings(null, fps, null, null) }
                             )
                         }
                         ExportCodec.entries.forEach { codec ->
-                            FilterChip(
+                            StudioOptionPill(
+                                label = codec.name,
                                 selected = project.exportSettings.codec == codec,
                                 onClick = { onUpdateSettings(null, null, codec, null) },
-                                label = { Text(codec.name, fontSize = 12.sp) }
+                                accentColor = palette.audioAmber,
+                                accentContainer = palette.amberMuted
                             )
                         }
                     }
 
                     Text("Bitrate Master", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         BitrateTier.entries.forEach { tier ->
-                            FilterChip(
+                            StudioOptionPill(
+                                label = "${tier.label} (${tier.mbpsLabel})",
                                 selected = project.exportSettings.bitrateTier == tier,
-                                onClick = { onUpdateSettings(null, null, null, tier) },
-                                label = { Text("${tier.label} (${tier.mbpsLabel})", fontSize = 11.sp) }
+                                onClick = { onUpdateSettings(null, null, null, tier) }
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    val (outW, outH) = Media3EffectFactory.computeExportDimensions(project)
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = palette.panelSurface,
+                        modifier = Modifier.fillMaxWidth().border(0.75.dp, palette.hairlineBorder, RoundedCornerShape(4.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("OUTPUT SPEC", style = TimecodeTextStyle.copy(fontSize = 10.sp, color = palette.textMuted))
+                            Text(
+                                text = "${outW}x${outH} • ${project.exportSettings.fps}fps • ${project.exportSettings.codec.name} • ${project.exportSettings.bitrateTier.mbpsLabel}",
+                                style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan, fontWeight = FontWeight.SemiBold)
+                            )
+                        }
+                    }
+
                     Button(
                         onClick = onStartExport,
                         enabled = project.clips.isNotEmpty(),
@@ -168,9 +197,10 @@ fun ExportSheet(
                             containerColor = palette.playheadCyan,
                             contentColor = palette.voidBg
                         ),
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("start_export_button")
                     ) {
                         Icon(Icons.Default.MovieCreation, contentDescription = null)
@@ -246,7 +276,7 @@ fun ExportSheet(
                                 Spacer(Modifier.width(10.dp))
                                 Column {
                                     Text("Export Ready!", style = MaterialTheme.typography.titleLarge, color = palette.textPrimary)
-                                    val mb = String.format("%.2f MB", exportState.fileSizeBytes / (1024f * 1024f))
+                                    val mb = String.format(Locale.US, "%.2f MB", exportState.fileSizeBytes / (1024f * 1024f))
                                     Text(
                                         text = "$mb • ${TimecodeFormatter.formatDurationShort(exportState.durationMs)}" +
                                             if (exportState.savedToGallery) " • Saved to Movies/CutForge" else "",
@@ -263,13 +293,8 @@ fun ExportSheet(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedButton(
-                            onClick = {
-                                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(exportState.shareUri, "video/mp4")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                runCatching { context.startActivity(viewIntent) }
-                            },
+                            onClick = { onPlayExportedFile(exportState.outputFile) },
+                            shape = RoundedCornerShape(4.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
@@ -292,6 +317,7 @@ fun ExportSheet(
                                 containerColor = palette.playheadCyan,
                                 contentColor = palette.voidBg
                             ),
+                            shape = RoundedCornerShape(4.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)

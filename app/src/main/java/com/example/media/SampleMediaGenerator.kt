@@ -45,21 +45,21 @@ object SampleMediaGenerator {
     }
 
     enum class AudioPreset(val fileName: String, val title: String, val durationMs: Long) {
-        CYBER_BEAT("sfx_cyber_beat.wav", "Cyber Pulse 120BPM", 8000L),
-        AMBIENT_PAD("sfx_ambient_pad.wav", "Midnight Synth Pad", 8000L),
+        CYBER_BEAT("sfx_pulse_beat.wav", "Pulse Beat 120BPM", 8000L),
+        AMBIENT_PAD("sfx_ambient_pad.wav", "Warm Underscore Pad", 8000L),
         CINEMA_RISER("sfx_cinema_riser.wav", "Sub Boom & Riser", 3000L),
         WHOOSH_SFX("sfx_whoosh.wav", "Whip Whoosh SFX", 1400L),
         SHUTTER_CLICK("sfx_shutter.wav", "Camera Shutter SFX", 900L),
-        LOFI_BEAT("sfx_lofi_groove.wav", "Lo-Fi Chill Groove", 8000L)
+        LOFI_BEAT("sfx_lofi_groove.wav", "Acoustic Rim Groove", 8000L)
     }
 
     suspend fun ensureSampleClips(context: Context): List<GeneratedSampleClip> =
         withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, "samples").apply { mkdirs() }
             val specs = listOf(
-                Triple("sample_neon_city.mp4", "Neon Skyline", VisualTheme.NEON_CITY),
+                Triple("sample_city_pan.mp4", "Dusk City Pan", VisualTheme.NEON_CITY),
                 Triple("sample_golden_horizon.mp4", "Golden Horizon", VisualTheme.GOLDEN_HORIZON),
-                Triple("sample_kinetic_pulse.mp4", "Kinetic Beat", VisualTheme.KINETIC_PULSE)
+                Triple("sample_studio_meter.mp4", "Studio Motion", VisualTheme.KINETIC_PULSE)
             )
             specs.map { (fileName, title, theme) ->
                 val mp4File = File(dir, fileName)
@@ -111,8 +111,7 @@ object SampleMediaGenerator {
 
         val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         var muxer: MediaMuxer? = null
-        var muxerStarted = false
-        var trackIndex = -1
+        val muxerState = MuxerState()
 
         try {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -129,35 +128,28 @@ object SampleMediaGenerator {
                 } finally {
                     surface.unlockCanvasAndPost(canvas)
                 }
-                drainEncoder(encoder, muxer, bufferInfo, endOfStream = false) { started, idx ->
-                    muxerStarted = started
-                    trackIndex = idx
-                }.also { (started, idx) ->
-                    muxerStarted = started
-                    trackIndex = idx
-                }
-                // Small pace so surface timestamps stay monotonic
-                Thread.sleep(8L)
+                drainEncoder(encoder, muxer, bufferInfo, endOfStream = false, state = muxerState)
+                Thread.sleep(6L)
             }
 
             encoder.signalEndOfInputStream()
             var drainTries = 0
-            while (drainTries < 40) {
+            while (drainTries < 45) {
                 val outIndex = encoder.dequeueOutputBuffer(bufferInfo, 10_000L)
                 if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
                     drainTries++
                 } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    if (!muxerStarted) {
-                        trackIndex = muxer.addTrack(encoder.outputFormat)
+                    if (!muxerState.started) {
+                        muxerState.trackIndex = muxer.addTrack(encoder.outputFormat)
                         muxer.start()
-                        muxerStarted = true
+                        muxerState.started = true
                     }
                 } else if (outIndex >= 0) {
                     val encodedData = encoder.getOutputBuffer(outIndex)
-                    if (encodedData != null && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && bufferInfo.size > 0 && muxerStarted) {
+                    if (encodedData != null && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && bufferInfo.size > 0 && muxerState.started && muxerState.trackIndex >= 0) {
                         encodedData.position(bufferInfo.offset)
                         encodedData.limit(bufferInfo.offset + bufferInfo.size)
-                        muxer.writeSampleData(trackIndex, encodedData, bufferInfo)
+                        muxer.writeSampleData(muxerState.trackIndex, encodedData, bufferInfo)
                     }
                     val eos = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                     encoder.releaseOutputBuffer(outIndex, false)
@@ -168,43 +160,46 @@ object SampleMediaGenerator {
         } finally {
             runCatching { encoder.stop() }
             runCatching { encoder.release() }
-            if (muxerStarted) {
+            if (muxerState.started) {
                 runCatching { muxer?.stop() }
             }
             runCatching { muxer?.release() }
         }
     }
 
+    private class MuxerState(
+        var started: Boolean = false,
+        var trackIndex: Int = -1
+    )
+
     private fun drainEncoder(
         encoder: MediaCodec,
         muxer: MediaMuxer,
         bufferInfo: MediaCodec.BufferInfo,
         endOfStream: Boolean,
-        onTrackState: (Boolean, Int) -> Unit
-    ): Pair<Boolean, Int> {
-        var muxerStarted = false
-        var trackIndex = -1
+        state: MuxerState
+    ) {
         while (true) {
             val outIndex = encoder.dequeueOutputBuffer(bufferInfo, 0L)
             if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
                 if (!endOfStream) break
             } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                trackIndex = muxer.addTrack(encoder.outputFormat)
-                muxer.start()
-                muxerStarted = true
-                onTrackState(true, trackIndex)
+                if (!state.started) {
+                    state.trackIndex = muxer.addTrack(encoder.outputFormat)
+                    muxer.start()
+                    state.started = true
+                }
             } else if (outIndex >= 0) {
                 val encodedData = encoder.getOutputBuffer(outIndex)
-                if (encodedData != null && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && bufferInfo.size > 0 && trackIndex >= 0) {
+                if (encodedData != null && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && bufferInfo.size > 0 && state.started && state.trackIndex >= 0) {
                     encodedData.position(bufferInfo.offset)
                     encodedData.limit(bufferInfo.offset + bufferInfo.size)
-                    muxer.writeSampleData(trackIndex, encodedData, bufferInfo)
+                    muxer.writeSampleData(state.trackIndex, encodedData, bufferInfo)
                 }
                 encoder.releaseOutputBuffer(outIndex, false)
                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) break
             }
         }
-        return muxerStarted to trackIndex
     }
 
     private fun renderFallbackPng(file: File, theme: VisualTheme, width: Int, height: Int) {
@@ -229,40 +224,40 @@ object SampleMediaGenerator {
             VisualTheme.NEON_CITY -> {
                 paint.shader = LinearGradient(
                     0f, 0f, 0f, h,
-                    intArrayOf(Color.rgb(9, 14, 34), Color.rgb(20, 12, 48), Color.rgb(6, 28, 44)),
+                    intArrayOf(Color.rgb(14, 16, 20), Color.rgb(24, 30, 42), Color.rgb(16, 20, 26)),
                     floatArrayOf(0f, 0.55f, 1f),
                     Shader.TileMode.CLAMP
                 )
                 canvas.drawRect(0f, 0f, w, h, paint)
                 paint.shader = null
 
-                // Glowing horizon sun/orb
+                // Editorial horizon sun/disc
                 val orbY = h * (0.36f + 0.04f * sin(t * 2f * PI).toFloat())
-                paint.color = Color.argb(90, 0, 229, 255)
+                paint.color = Color.argb(72, 58, 157, 246)
                 canvas.drawCircle(w * 0.5f, orbY, w * 0.34f, paint)
-                paint.color = Color.argb(200, 0, 229, 255)
-                canvas.drawCircle(w * 0.5f, orbY, w * 0.21f, paint)
+                paint.color = Color.argb(180, 222, 146, 53)
+                canvas.drawCircle(w * 0.5f, orbY, w * 0.19f, paint)
 
-                // Stylized parallax skyline bars
+                // Stylized parallax architectural silhouettes
                 val barCount = 12
                 val barW = w / barCount
                 for (i in 0 until barCount) {
                     val shift = ((i + t * 3f) % barCount) / barCount
                     val bh = h * (0.16f + 0.24f * absSin(i * 1.3f + t * 4f))
-                    paint.color = if (i % 3 == 0) Color.rgb(18, 28, 52) else Color.rgb(12, 18, 34)
+                    paint.color = if (i % 3 == 0) Color.rgb(30, 34, 44) else Color.rgb(20, 23, 30)
                     val left = i * barW + 4f
                     canvas.drawRect(left, h * 0.72f - bh, left + barW - 8f, h * 0.72f, paint)
-                    paint.color = Color.argb(180, 0, 229, 255)
-                    canvas.drawRect(left + 6f, h * 0.72f - bh + 12f, left + barW - 14f, h * 0.72f - bh + 20f, paint)
+                    paint.color = Color.argb(150, 58, 157, 246)
+                    canvas.drawRect(left + 6f, h * 0.72f - bh + 12f, left + barW - 14f, h * 0.72f - bh + 18f, paint)
                     if (shift > 0.5f) {
-                        paint.color = Color.argb(130, 255, 179, 0)
-                        canvas.drawCircle(left + barW * 0.5f, h * 0.72f - bh * 0.4f, 6f, paint)
+                        paint.color = Color.argb(140, 222, 146, 53)
+                        canvas.drawCircle(left + barW * 0.5f, h * 0.72f - bh * 0.4f, 5f, paint)
                     }
                 }
 
-                // Perspective cyan floor grid
-                paint.color = Color.argb(140, 0, 229, 255)
-                paint.strokeWidth = 3f
+                // Perspective reference grid
+                paint.color = Color.argb(110, 58, 157, 246)
+                paint.strokeWidth = 2.5f
                 for (row in 0..8) {
                     val frac = ((row / 8f) + t * 2f) % 1f
                     val y = h * 0.72f + frac * frac * (h * 0.28f)
@@ -310,24 +305,24 @@ object SampleMediaGenerator {
             VisualTheme.KINETIC_PULSE -> {
                 paint.shader = LinearGradient(
                     0f, 0f, w, h,
-                    intArrayOf(Color.rgb(11, 13, 22), Color.rgb(24, 18, 48), Color.rgb(11, 13, 22)),
+                    intArrayOf(Color.rgb(14, 15, 18), Color.rgb(26, 29, 36), Color.rgb(14, 15, 18)),
                     null,
                     Shader.TileMode.CLAMP
                 )
                 canvas.drawRect(0f, 0f, w, h, paint)
                 paint.shader = null
 
-                // Kinetic radial rings + equalizer bars
+                // Studio calibration rings + spectrum meter bars
                 val cx = w * 0.5f
                 val cy = h * 0.45f
                 paint.style = Paint.Style.STROKE
                 for (ring in 1..4) {
                     val phase = (t * 2f + ring * 0.25f) % 1f
-                    paint.strokeWidth = 6f * (1f - phase) + 2f
+                    paint.strokeWidth = 5f * (1f - phase) + 1.5f
                     paint.color = if (ring % 2 == 0) {
-                        Color.argb(((1f - phase) * 220).toInt(), 0, 229, 255)
+                        Color.argb(((1f - phase) * 200).toInt(), 58, 157, 246)
                     } else {
-                        Color.argb(((1f - phase) * 220).toInt(), 255, 77, 109)
+                        Color.argb(((1f - phase) * 200).toInt(), 222, 146, 53)
                     }
                     canvas.drawCircle(cx, cy, w * (0.12f + phase * 0.36f), paint)
                 }
@@ -339,22 +334,22 @@ object SampleMediaGenerator {
                 for (b in 0 until bars) {
                     val amp = 0.2f + 0.8f * absSin(b * 0.65f + t * 10f)
                     val bh = h * 0.18f * amp
-                    paint.color = if (b % 2 == 0) Color.rgb(0, 229, 255) else Color.rgb(255, 179, 0)
+                    paint.color = if (b % 2 == 0) Color.rgb(58, 157, 246) else Color.rgb(222, 146, 53)
                     val left = startX + b * (bw + gap)
                     canvas.drawRoundRect(
                         RectF(left, h * 0.78f - bh, left + bw, h * 0.78f + bh * 0.25f),
-                        bw * 0.5f,
-                        bw * 0.5f,
+                        bw * 0.4f,
+                        bw * 0.4f,
                         paint
                     )
                 }
             }
         }
 
-        // Subtle studio frame counter tick at bottom corner
-        paint.color = Color.argb(140, 244, 246, 250)
-        paint.textSize = 24f
-        canvas.drawText("CUTFORGE SAMPLE • ${(t * 100).toInt()}%", 36f, h - 42f, paint)
+        // Subtle technical timecode stamp at lower left
+        paint.color = Color.argb(150, 240, 242, 245)
+        paint.textSize = 22f
+        canvas.drawText("REF CLIP • ${(t * 100).toInt()}%", 36f, h - 42f, paint)
     }
 
     private fun absSin(v: Float): Float = kotlin.math.abs(sin(v.toDouble())).toFloat()

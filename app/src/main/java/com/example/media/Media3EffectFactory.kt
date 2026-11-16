@@ -203,8 +203,8 @@ object Media3EffectFactory {
         val videoSequence = EditedMediaItemSequence.Builder(videoEditedItems).build()
         val sequences = mutableListOf(videoSequence)
 
-        val activeAudio = project.audioTracks.firstOrNull { !it.isMuted }
-        if (activeAudio != null) {
+        val activeAudioTracks = project.audioTracks.filter { !it.isMuted }.take(4)
+        activeAudioTracks.forEach { activeAudio ->
             val audioMediaItem = MediaItem.Builder()
                 .setUri(Uri.parse(activeAudio.uriString))
                 .setClippingConfiguration(
@@ -228,7 +228,7 @@ object Media3EffectFactory {
             }
             val editedAudio = EditedMediaItem.Builder(audioMediaItem)
                 .setRemoveVideo(true)
-                .setDurationUs(activeAudio.durationMs * 1000L)
+                .setDurationUs((activeAudio.durationMs * 1000L).coerceAtLeast(500_000L))
                 .setEffects(Effects(audioProcessors, emptyList()))
                 .build()
 

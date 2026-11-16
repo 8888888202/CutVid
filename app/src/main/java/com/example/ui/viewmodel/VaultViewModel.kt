@@ -37,10 +37,10 @@ enum class StudioTemplate(
     val transition: TransitionType,
     val defaultTitleText: String
 ) {
-    CINEMA_VLOG("Cinema Vlog", "16:9 • Teal Grade", AspectRatioPreset.RATIO_16_9, ColorPreset.TEAL_ORANGE, TransitionType.CROSSFADE, "CINEMA DIARY"),
-    KINETIC_REEL("Kinetic Reel", "9:16 • Punch Cuts", AspectRatioPreset.RATIO_9_16, ColorPreset.CYBER_NEON, TransitionType.ZOOM_IN, "NEW DROP"),
-    GOLDEN_TRAVEL("Golden Story", "4:5 • Kodak Gold", AspectRatioPreset.RATIO_4_5, ColorPreset.KODAK_WARM, TransitionType.FLASH_WHITE, "GOLDEN HOUR"),
-    CLEAN_SQUARE("Square Cut", "1:1 • Crisp Matte", AspectRatioPreset.RATIO_1_1, ColorPreset.VIVID_POP, TransitionType.DIP_BLACK, "HIGHLIGHT")
+    CINEMA_VLOG("Widescreen Vlog", "16:9 • Teal Grade", AspectRatioPreset.RATIO_16_9, ColorPreset.TEAL_ORANGE, TransitionType.CROSSFADE, "FIELD NOTES"),
+    KINETIC_REEL("Vertical Edit 9:16", "9:16 • Punch Cuts", AspectRatioPreset.RATIO_9_16, ColorPreset.CYBER_NEON, TransitionType.ZOOM_IN, "HIGHLIGHT"),
+    GOLDEN_TRAVEL("Editorial 4:5", "4:5 • Warm Film", AspectRatioPreset.RATIO_4_5, ColorPreset.KODAK_WARM, TransitionType.FLASH_WHITE, "GOLDEN HOUR"),
+    CLEAN_SQUARE("Square Frame 1:1", "1:1 • Crisp Matte", AspectRatioPreset.RATIO_1_1, ColorPreset.VIVID_POP, TransitionType.DIP_BLACK, "CHAPTER 01")
 }
 
 class VaultViewModel(application: Application) : AndroidViewModel(application) {
@@ -168,9 +168,9 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
                     fallbackDurationMs = audioAsset.durationMs
                 ).copy(volume = 0.72f, isLooping = true)
 
-                val projectTitle = template?.title ?: "Neon Sample Reel"
+                val projectTitle = template?.title ?: "Demo Edit 01"
                 val projectRatio = template?.ratio ?: AspectRatioPreset.RATIO_9_16
-                val overlayTitle = template?.defaultTitleText ?: "CUTFORGE STUDIO"
+                val overlayTitle = template?.defaultTitleText ?: "CUTFORGE EDIT"
 
                 val overlay = TextOverlayItem(
                     text = overlayTitle,

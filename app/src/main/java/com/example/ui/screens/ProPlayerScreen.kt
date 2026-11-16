@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -65,16 +66,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -112,12 +109,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.media.MediaStreamSummary
 import com.example.media.TimecodeFormatter
+import com.example.ui.components.StudioOptionPill
+import com.example.ui.components.StudioScrubSlider
 import com.example.ui.theme.LocalStudioPalette
 import com.example.ui.theme.TimecodeTextStyle
 import com.example.ui.viewmodel.AudioTrackOption
 import com.example.ui.viewmodel.PlayerAspectMode
 import com.example.ui.viewmodel.ProPlayerViewModel
 import kotlinx.coroutines.delay
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -258,6 +258,7 @@ fun ProPlayerScreen(
                 .padding(innerPadding)
         ) {
             val isTabletWide = maxWidth >= 760.dp
+            val containerAspect = if (maxHeight > 0.dp) maxWidth / maxHeight else (16f / 9f)
 
             // Core Video / Audio Stage
             Box(
@@ -381,19 +382,24 @@ fun ProPlayerScreen(
                 }
 
                 val isAudioOnly = streamSummary?.isAudioOnly == true
-
-                val videoBoxModifier = when (aspectMode) {
-                    PlayerAspectMode.FILL_CROP -> Modifier.fillMaxSize()
-                    else -> Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(videoAspect.coerceIn(0.3f, 3.2f))
-                }.graphicsLayer {
-                    val fillMul = if (aspectMode == PlayerAspectMode.FILL_CROP) 1.25f else 1f
-                    scaleX = pinchZoom * fillMul
-                    scaleY = pinchZoom * fillMul
-                    translationX = panX
-                    translationY = panY
+                val exactFillMul = remember(aspectMode, videoAspect, containerAspect) {
+                    if (aspectMode != PlayerAspectMode.FILL_CROP) 1f
+                    else {
+                        val safeVid = videoAspect.coerceIn(0.3f, 3.2f)
+                        val safeCon = containerAspect.coerceIn(0.3f, 3.2f)
+                        maxOf(safeCon / safeVid, safeVid / safeCon).coerceIn(1f, 3.5f)
+                    }
                 }
+
+                val videoBoxModifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(videoAspect.coerceIn(0.3f, 3.2f))
+                    .graphicsLayer {
+                        scaleX = pinchZoom * exactFillMul
+                        scaleY = pinchZoom * exactFillMul
+                        translationX = panX
+                        translationY = panY
+                    }
 
                 var boundView: TextureView? = remember { null }
                 Box(modifier = videoBoxModifier.alpha(if (isAudioOnly) 0f else 1f)) {
@@ -446,7 +452,7 @@ fun ProPlayerScreen(
                     }
                 }
 
-                // Center Gesture HUD + Vertical Edge Meter
+                // Center Gesture HUD + Progress Bar Gauge
                 AnimatedVisibility(
                     visible = hudGesture != ProHudGesture.NONE,
                     enter = fadeIn(),
@@ -457,26 +463,47 @@ fun ProPlayerScreen(
                         shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.border(1.dp, palette.playheadCyan, RoundedCornerShape(4.dp))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            when (hudGesture) {
-                                ProHudGesture.BRIGHTNESS -> Icon(Icons.Default.Brightness6, null, tint = palette.audioAmber, modifier = Modifier.size(18.dp))
-                                ProHudGesture.VOLUME -> Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = palette.playheadCyan, modifier = Modifier.size(18.dp))
-                                ProHudGesture.JUMP -> Icon(
-                                    if (hudLevel > 0.5f) Icons.Default.FastForward else Icons.Default.FastRewind,
-                                    null,
-                                    tint = palette.playheadCyan,
-                                    modifier = Modifier.size(18.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                when (hudGesture) {
+                                    ProHudGesture.BRIGHTNESS -> Icon(Icons.Default.Brightness6, null, tint = palette.audioAmber, modifier = Modifier.size(18.dp))
+                                    ProHudGesture.VOLUME -> Icon(Icons.AutoMirrored.Filled.VolumeUp, null, tint = palette.playheadCyan, modifier = Modifier.size(18.dp))
+                                    ProHudGesture.JUMP -> Icon(
+                                        if (hudLevel > 0.5f) Icons.Default.FastForward else Icons.Default.FastRewind,
+                                        null,
+                                        tint = palette.playheadCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    else -> {}
+                                }
+                                Text(
+                                    text = hudText,
+                                    style = TimecodeTextStyle.copy(color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 )
-                                else -> {}
                             }
-                            Text(
-                                text = hudText,
-                                style = TimecodeTextStyle.copy(color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            )
+                            if (hudGesture == ProHudGesture.BRIGHTNESS || hudGesture == ProHudGesture.VOLUME) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(110.dp)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(palette.elevatedTrack)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(hudLevel.coerceIn(0f, 1f))
+                                            .fillMaxHeight()
+                                            .background(if (hudGesture == ProHudGesture.BRIGHTNESS) palette.audioAmber else palette.playheadCyan)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -582,11 +609,11 @@ fun ProPlayerScreen(
                                 onClick = { viewModel.sendCurrentMediaToTimeline(onOpenInEditor) },
                                 shape = RoundedCornerShape(4.dp),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.testTag("pro_player_edit_in_nle")
+                                modifier = Modifier.height(34.dp).testTag("pro_player_edit_in_nle")
                             ) {
                                 Icon(Icons.Default.ContentCut, null, tint = palette.audioAmber, modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Edit", color = palette.audioAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Edit", color = palette.audioAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                         }
                         IconButton(
@@ -613,7 +640,7 @@ fun ProPlayerScreen(
                         .border(0.5.dp, palette.hairlineBorder)
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    // Scrub Bar + A-B Loop indicator
+                    // Precision Scrub Bar + A-B Loop markers
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = TimecodeFormatter.formatTimecode(positionMs),
@@ -621,12 +648,17 @@ fun ProPlayerScreen(
                             modifier = Modifier.width(64.dp)
                         )
                         val durFloat = durationMs.coerceAtLeast(1000L).toFloat()
-                        Slider(
+                        val markerANorm = abLoopStartMs?.let { (it / durFloat).coerceIn(0f, 1f) }
+                        val markerBNorm = abLoopEndMs?.let { (it / durFloat).coerceIn(0f, 1f) }
+                        StudioScrubSlider(
                             value = positionMs.toFloat().coerceIn(0f, durFloat),
                             onValueChange = { viewModel.seekTo(it.toLong()) },
                             valueRange = 0f..durFloat,
-                            colors = SliderDefaults.colors(thumbColor = palette.playheadCyan, activeTrackColor = palette.playheadCyan),
-                            modifier = Modifier.weight(1f).height(26.dp)
+                            accentColor = palette.playheadCyan,
+                            height = 28.dp,
+                            markerNormA = markerANorm,
+                            markerNormB = markerBNorm,
+                            modifier = Modifier.weight(1f)
                         )
                         Text(
                             text = TimecodeFormatter.formatTimecode(durationMs),
@@ -652,19 +684,19 @@ fun ProPlayerScreen(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                             IconButton(
                                 onClick = viewModel::playPrevious,
-                                modifier = Modifier.minimumInteractiveComponentSize()
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Icon(Icons.Default.SkipPrevious, "Previous", tint = palette.textSecondary)
+                                Icon(Icons.Default.SkipPrevious, "Previous", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
                             }
                             IconButton(
                                 onClick = { viewModel.stepFrame(-1) },
-                                modifier = Modifier.minimumInteractiveComponentSize()
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Prev frame", tint = palette.textSecondary)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Prev frame", tint = palette.textSecondary, modifier = Modifier.size(22.dp))
                             }
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(width = 46.dp, height = 38.dp)
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(palette.playheadCyan)
                                     .clickable(onClick = viewModel::togglePlayPause)
@@ -675,20 +707,20 @@ fun ProPlayerScreen(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (isPlaying) "Pause" else "Play",
                                     tint = palette.voidBg,
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                             IconButton(
                                 onClick = { viewModel.stepFrame(1) },
-                                modifier = Modifier.minimumInteractiveComponentSize()
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next frame", tint = palette.textSecondary)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next frame", tint = palette.textSecondary, modifier = Modifier.size(22.dp))
                             }
                             IconButton(
                                 onClick = viewModel::playNext,
-                                modifier = Modifier.minimumInteractiveComponentSize()
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Icon(Icons.Default.SkipNext, "Next", tint = palette.textSecondary)
+                                Icon(Icons.Default.SkipNext, "Next", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
                             }
                         }
 
@@ -778,11 +810,10 @@ fun ProPlayerScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f).forEach { spd ->
-                        FilterChip(
+                        StudioOptionPill(
+                            label = "${spd}x",
                             selected = abs(playbackSpeed - spd) < 0.02f,
-                            onClick = { viewModel.setSpeed(spd) },
-                            label = { Text("${spd}x", fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = palette.cyanMuted, selectedLabelColor = palette.playheadCyan)
+                            onClick = { viewModel.setSpeed(spd) }
                         )
                     }
                 }
@@ -790,19 +821,24 @@ fun ProPlayerScreen(
                     Text("Software Preamp Boost", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
                     Text("$audioBoostPercent%", style = TimecodeTextStyle.copy(color = palette.audioAmber, fontSize = 12.sp))
                 }
-                Slider(
-                    value = audioBoostPercent.toFloat(),
+                StudioScrubSlider(
+                    value = audioBoostPercent.toFloat().coerceIn(100f, 200f),
                     onValueChange = { viewModel.setAudioBoostPercent(it.roundToInt()) },
                     valueRange = 100f..200f,
-                    colors = SliderDefaults.colors(thumbColor = palette.audioAmber, activeTrackColor = palette.audioAmber)
+                    accentColor = palette.audioAmber,
+                    defaultValue = 100f,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text("Sleep Timer", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     listOf(0 to "Off", 15 to "15m", 30 to "30m", 60 to "60m").forEach { (mins, label) ->
-                        FilterChip(
+                        StudioOptionPill(
+                            label = label,
                             selected = sleepTimerMinutes == mins,
-                            onClick = { viewModel.setSleepTimerMinutes(mins) },
-                            label = { Text(label) }
+                            onClick = { viewModel.setSleepTimerMinutes(mins) }
                         )
                     }
                 }
@@ -843,7 +879,7 @@ fun ProPlayerScreen(
                     Text("Sync Offset", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(onClick = { viewModel.adjustSubtitleOffset(-250L) }, shape = RoundedCornerShape(4.dp)) { Text("-0.25s") }
-                        Text("${String.format("%+.2f", subtitleOffsetMs / 1000f)}s", style = TimecodeTextStyle.copy(color = palette.playheadCyan))
+                        Text("${String.format(Locale.US, "%+.2f", subtitleOffsetMs / 1000f)}s", style = TimecodeTextStyle.copy(color = palette.playheadCyan))
                         OutlinedButton(onClick = { viewModel.adjustSubtitleOffset(250L) }, shape = RoundedCornerShape(4.dp)) { Text("+0.25s") }
                     }
                 }
@@ -1000,7 +1036,10 @@ private fun StreamTelemetryDialog(
         containerColor = palette.studioSlate,
         title = { Text("Stream Telemetry & Audio", color = palette.textPrimary) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (summary != null) {
                     Text("FILE: ${summary.displayName}", style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.textPrimary))
                     Text("VIDEO: ${summary.videoCodec ?: "None"} (${summary.width}x${summary.height})", style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan))
@@ -1013,10 +1052,10 @@ private fun StreamTelemetryDialog(
                     Spacer(Modifier.height(4.dp))
                     Text("Audio Streams", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
                     audioTracks.forEach { track ->
-                        FilterChip(
+                        StudioOptionPill(
+                            label = track.label,
                             selected = track.selected,
-                            onClick = { onSelectAudioTrack(track) },
-                            label = { Text(track.label, fontSize = 11.sp) }
+                            onClick = { onSelectAudioTrack(track) }
                         )
                     }
                 }

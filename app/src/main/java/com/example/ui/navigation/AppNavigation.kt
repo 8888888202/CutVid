@@ -43,6 +43,9 @@ fun CutForgeNavHost() {
                 projectId = route.projectId,
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onOpenPlayer = { uri ->
+                    navController.navigate(PlayerRoute(Uri.encode(uri)))
                 }
             )
         }

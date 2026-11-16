@@ -164,4 +164,32 @@ class TimelineOperationsTest {
         // +1000ms offset shifts cue 2 (5000..7500) to match 6000..8500
         assertEquals("Universal Offline Player", SrtSubtitleParser.activeTextAt(cues, 8000L, 1000L))
     }
+
+    @Test
+    fun splitClipAtPlayhead_guardsShortSegmentSplits() {
+        val shortClip = VideoClip(
+            id = "short-1",
+            uriString = "file:///tmp/short.mp4",
+            displayName = "Short",
+            sourceDurationMs = 500L,
+            trimStartMs = 0L,
+            trimEndMs = 500L
+        )
+        val project = VideoProject(clips = listOf(shortClip))
+        val (unchanged, secondId) = TimelineOperations.splitClipAtPlayhead(project, 250L)
+        assertNull(secondId)
+        assertEquals(1, unchanged.clips.size)
+    }
+
+    @Test
+    fun colorPreset_andPreviewMatrixMultiplier_reflectStudioCalibration() {
+        assertEquals("Film 2383", ColorPreset.KODAK_WARM.label)
+        assertEquals("Cool Chrome", ColorPreset.CYBER_NEON.label)
+
+        val grade = TimelineOperations.applyPresetToGrade(ColorPreset.TEAL_ORANGE)
+        val matrix = Media3EffectFactory.colorMatrixPreviewMultiplier(grade)
+        assertEquals(20, matrix.size)
+        assertTrue(matrix.any { it != 0f })
+        assertTrue(matrix[0] > 0.5f)
+    }
 }

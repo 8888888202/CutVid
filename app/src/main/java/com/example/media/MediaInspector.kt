@@ -168,9 +168,7 @@ object MediaInspector {
         } else {
             extractDurationMs(context, uri).coerceAtLeast(1000L)
         }
-        val peaks = if (isImage) emptyList() else List(40) { i ->
-            0.18f + 0.52f * abs(sin(i * 0.45f))
-        }
+        val peaks = if (isImage) emptyList() else extractWaveformPeaks(context, uri, targetCount = 48)
         VideoClip(
             uriString = uri.toString(),
             displayName = title,
@@ -408,7 +406,7 @@ object MediaInspector {
     ): List<Bitmap> = withContext(Dispatchers.IO) {
         val uri = Uri.parse(clip.uriString)
         if (clip.isImage) {
-            val bmp = decodeScaledBitmap(context, uri, maxWidth = 160)
+            val bmp = decodeScaledBitmap(context, uri, maxWidth = 160, preferRgb565 = true)
             return@withContext if (bmp != null) List(frameCount.coerceAtLeast(1)) { bmp } else emptyList()
         }
 
@@ -444,7 +442,7 @@ object MediaInspector {
             val outFile = File(thumbDir, "$projectId.jpg")
             val uri = Uri.parse(clip.uriString)
             val bmp = if (clip.isImage) {
-                decodeScaledBitmap(context, uri, 480)
+                decodeScaledBitmap(context, uri, 480, preferRgb565 = true)
             } else {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -566,15 +564,27 @@ object MediaInspector {
         return peaks.map { it.coerceIn(0.10f, 1.0f) }
     }
 
-    private fun decodeScaledBitmap(context: Context, uri: Uri, maxWidth: Int): Bitmap? {
+    private fun decodeScaledBitmap(
+        context: Context,
+        uri: Uri,
+        maxWidth: Int,
+        preferRgb565: Boolean = false
+    ): Bitmap? {
         return runCatching {
             val stream1 = context.contentResolver.openInputStream(uri) ?: return null
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             stream1.use { BitmapFactory.decodeStream(it, null, opts) }
-            val sampleSize = (opts.outWidth / maxWidth).coerceAtLeast(1)
+            val sampleSize = (opts.outWidth / maxWidth.coerceAtLeast(1)).coerceAtLeast(1)
             val stream2 = context.contentResolver.openInputStream(uri) ?: return null
             stream2.use {
-                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sampleSize })
+                BitmapFactory.decodeStream(
+                    it,
+                    null,
+                    BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        if (preferRgb565) inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                )
             }
         }.getOrNull()
     }

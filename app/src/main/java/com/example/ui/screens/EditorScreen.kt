@@ -20,17 +20,20 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.VideoLibrary
+import android.net.Uri
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,6 +82,7 @@ import kotlinx.coroutines.launch
 fun EditorScreen(
     projectId: String,
     onNavigateBack: () -> Unit,
+    onOpenPlayer: (String) -> Unit,
     viewModel: EditorViewModel = viewModel()
 ) {
     val palette = LocalStudioPalette.current
@@ -252,34 +256,43 @@ fun EditorScreen(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = viewModel::undo,
-                            enabled = canUndo,
-                            modifier = Modifier.minimumInteractiveComponentSize().testTag("undo_button")
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(palette.panelSurface)
+                                .border(0.75.dp, palette.hairlineBorder, RoundedCornerShape(4.dp)),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = if (canUndo) palette.textPrimary else palette.textMuted, modifier = Modifier.size(20.dp))
+                            IconButton(
+                                onClick = viewModel::undo,
+                                enabled = canUndo,
+                                modifier = Modifier.size(38.dp, 34.dp).testTag("undo_button")
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = if (canUndo) palette.textPrimary else palette.textMuted, modifier = Modifier.size(18.dp))
+                            }
+                            Box(modifier = Modifier.width(0.75.dp).height(18.dp).background(palette.hairlineBorder))
+                            IconButton(
+                                onClick = viewModel::redo,
+                                enabled = canRedo,
+                                modifier = Modifier.size(38.dp, 34.dp).testTag("redo_button")
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Redo, "Redo", tint = if (canRedo) palette.textPrimary else palette.textMuted, modifier = Modifier.size(18.dp))
+                            }
                         }
-                        IconButton(
-                            onClick = viewModel::redo,
-                            enabled = canRedo,
-                            modifier = Modifier.minimumInteractiveComponentSize().testTag("redo_button")
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Redo, "Redo", tint = if (canRedo) palette.textPrimary else palette.textMuted, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
                                 viewModel.pausePlayback()
                                 showExportSheet = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = palette.playheadCyan, contentColor = palette.voidBg),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.testTag("open_export_button")
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier.height(34.dp).testTag("open_export_button")
                         ) {
-                            Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Download, null, modifier = Modifier.size(15.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Export", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("Export", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 }
@@ -292,6 +305,9 @@ fun EditorScreen(
                 .padding(innerPadding)
         ) {
             val isWideStudio = maxWidth >= 760.dp && !isFullscreenPreview
+            val isShortScreen = maxHeight < 660.dp
+            val adaptiveTimelineH = if (isShortScreen) 146.dp else 176.dp
+            val adaptiveDockH = if (isShortScreen) 152.dp else 184.dp
 
             if (isFullscreenPreview) {
                 PreviewStage(
@@ -508,7 +524,8 @@ fun EditorScreen(
                         onSplitClick = viewModel::splitAtPlayhead,
                         onAddClipClick = { showAddClipDialog = true },
                         onDropBeatMarker = viewModel::addBeatMarkerAtPlayhead,
-                        onZoomChange = viewModel::setTimelineZoom
+                        onZoomChange = viewModel::setTimelineZoom,
+                        trackHeightDp = adaptiveTimelineH
                     )
 
                     EditorToolDock(
@@ -558,7 +575,8 @@ fun EditorScreen(
                         onUpdateAudioTrack = viewModel::updateSelectedAudioTrack,
                         onDeleteAudioTrack = viewModel::deleteSelectedAudioTrack,
                         onSelectAspectRatio = viewModel::setAspectRatio,
-                        onSelectCanvasFill = viewModel::setCanvasFillStyle
+                        onSelectCanvasFill = viewModel::setCanvasFillStyle,
+                        panelHeightDp = adaptiveDockH
                     )
                 }
             }
@@ -585,7 +603,7 @@ fun EditorScreen(
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = palette.playheadCyan, contentColor = palette.voidBg),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Choose Videos / Photos", fontWeight = FontWeight.Bold)
@@ -595,10 +613,10 @@ fun EditorScreen(
                             showAddClipDialog = false
                             viewModel.addSampleClips()
                         },
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.AutoAwesome, null, tint = palette.audioAmber, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.VideoLibrary, null, tint = palette.audioAmber, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Load Reference Clips", color = palette.audioAmber)
                     }
@@ -631,6 +649,11 @@ fun EditorScreen(
             onUpdateSettings = viewModel::updateExportSettings,
             onStartExport = viewModel::startExport,
             onCancelExport = viewModel::cancelExport,
+            onPlayExportedFile = { file ->
+                viewModel.resetExportState()
+                showExportSheet = false
+                onOpenPlayer(Uri.fromFile(file).toString())
+            },
             onDismiss = {
                 if (exportState !is ExportUiState.Exporting) {
                     viewModel.resetExportState()

@@ -22,27 +22,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -53,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.example.data.model.AspectRatioPreset
 import com.example.data.model.AudioTrackItem
 import com.example.data.model.BadgeStickerType
@@ -95,33 +91,27 @@ fun TransitionPanel(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(TransitionType.entries) { type ->
                 val selected = clip.transitionIn == type
-                FilterChip(
+                StudioOptionPill(
+                    label = type.label,
                     selected = selected,
-                    onClick = { onSetTransition(type, clip.transitionDurationMs) },
-                    label = { Text(type.label, fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = palette.cyanMuted,
-                        selectedLabelColor = palette.playheadCyan
-                    )
+                    onClick = { onSetTransition(type, clip.transitionDurationMs) }
                 )
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Duration", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
-            Spacer(Modifier.width(12.dp))
-            Slider(
-                value = clip.transitionDurationMs.toFloat(),
+            Text("Duration", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(62.dp))
+            StudioScrubSlider(
+                value = clip.transitionDurationMs.toFloat().coerceIn(200f, 1500f),
                 onValueChange = { onSetTransition(clip.transitionIn, it.toLong()) },
                 valueRange = 200f..1500f,
-                colors = SliderDefaults.colors(
-                    thumbColor = palette.playheadCyan,
-                    activeTrackColor = palette.playheadCyan
-                ),
+                defaultValue = 500f,
                 modifier = Modifier.weight(1f)
             )
+            Spacer(Modifier.width(8.dp))
             Text(
-                text = "${String.format("%.1f", clip.transitionDurationMs / 1000f)}s",
-                style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 11.sp)
+                text = "${String.format(Locale.US, "%.1f", clip.transitionDurationMs / 1000f)}s",
+                style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 11.sp),
+                modifier = Modifier.width(36.dp)
             )
         }
     }
@@ -186,7 +176,7 @@ fun TextOverlayPanel(
             modifier = Modifier.fillMaxWidth()
         )
 
-        val swatches = listOf(0xFFFFFFFFL, 0xFF00E5FFL, 0xFFFFB300L, 0xFFFF4D6DL, 0xFF10B981L)
+        val swatches = listOf(0xFFF0F2F5L, 0xFF3A9DF6L, 0xFFDE9235L, 0xFFDC4A54L, 0xFF2FB373L)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -196,50 +186,51 @@ fun TextOverlayPanel(
                 swatches.forEach { argb ->
                     Box(
                         modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color(argb))
                             .border(
                                 width = if (overlay.colorArgb == argb) 2.dp else 1.dp,
                                 color = if (overlay.colorArgb == argb) palette.playheadCyan else palette.hairlineBorder,
-                                shape = CircleShape
+                                shape = RoundedCornerShape(4.dp)
                             )
                             .clickable { onUpdateTextOverlay { it.copy(colorArgb = argb) } }
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Backdrop", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
-                Spacer(Modifier.width(6.dp))
-                Switch(
-                    checked = overlay.hasBackground,
-                    onCheckedChange = { checked -> onUpdateTextOverlay { it.copy(hasBackground = checked) } }
-                )
-            }
+            StudioTogglePill(
+                label = "Backdrop",
+                checked = overlay.hasBackground,
+                onCheckedChange = { checked -> onUpdateTextOverlay { it.copy(hasBackground = checked) } }
+            )
         }
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(TextAnimation.entries) { anim ->
-                FilterChip(
+                StudioOptionPill(
+                    label = anim.label,
                     selected = overlay.animation == anim,
                     onClick = { onUpdateTextOverlay { it.copy(animation = anim) } },
-                    label = { Text(anim.label, fontSize = 11.sp) }
+                    accentColor = palette.gradeViolet,
+                    accentContainer = palette.gradeViolet.copy(alpha = 0.22f)
                 )
             }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Duration", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
-            Spacer(Modifier.width(10.dp))
-            Slider(
-                value = overlay.durationMs.toFloat(),
+            Text("Duration", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(62.dp))
+            StudioScrubSlider(
+                value = overlay.durationMs.toFloat().coerceIn(800f, 12000f),
                 onValueChange = { onUpdateTextOverlay { cur -> cur.copy(durationMs = it.toLong()) } },
                 valueRange = 800f..12000f,
+                defaultValue = 3000f,
                 modifier = Modifier.weight(1f)
             )
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = TimecodeFormatter.formatDurationShort(overlay.durationMs),
-                style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 11.sp)
+                style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontSize = 11.sp),
+                modifier = Modifier.width(42.dp)
             )
         }
     }
@@ -311,24 +302,28 @@ fun PipOverlayPanel(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Scale", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(58.dp))
-            Slider(
-                value = sticker.scale,
+            StudioScrubSlider(
+                value = sticker.scale.coerceIn(0.5f, 2.2f),
                 onValueChange = { v -> onUpdateSticker { it.copy(scale = v) } },
                 valueRange = 0.5f..2.2f,
-                modifier = Modifier.weight(1f).height(26.dp)
+                defaultValue = 1.0f,
+                modifier = Modifier.weight(1f)
             )
-            Text("${String.format("%.1f", sticker.scale)}x", style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan))
+            Spacer(Modifier.width(8.dp))
+            Text("${String.format(Locale.US, "%.1f", sticker.scale)}x", style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan), modifier = Modifier.width(38.dp))
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Duration", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(58.dp))
-            Slider(
-                value = sticker.durationMs.toFloat(),
+            StudioScrubSlider(
+                value = sticker.durationMs.toFloat().coerceIn(800f, 12000f),
                 onValueChange = { v -> onUpdateSticker { it.copy(durationMs = v.toLong()) } },
                 valueRange = 800f..12000f,
-                modifier = Modifier.weight(1f).height(26.dp)
+                defaultValue = 3000f,
+                modifier = Modifier.weight(1f)
             )
-            Text(TimecodeFormatter.formatDurationShort(sticker.durationMs), style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan))
+            Spacer(Modifier.width(8.dp))
+            Text(TimecodeFormatter.formatDurationShort(sticker.durationMs), style = TimecodeTextStyle.copy(fontSize = 11.sp, color = palette.playheadCyan), modifier = Modifier.width(38.dp))
         }
     }
 }
@@ -428,7 +423,7 @@ fun AudioMixerPanel(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ToolChipButton(
                     label = if (audio.isMuted) "Muted" else "Active",
-                    icon = if (audio.isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                    icon = if (audio.isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                     tint = if (audio.isMuted) palette.cutCrimson else palette.audioAmber,
                     onClick = { onUpdateAudioTrack { it.copy(isMuted = !it.isMuted) } }
                 )
@@ -443,48 +438,48 @@ fun AudioMixerPanel(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Gain", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(54.dp))
-            Slider(
-                value = audio.volume,
+            StudioScrubSlider(
+                value = audio.volume.coerceIn(0f, 2f),
                 onValueChange = { v -> onUpdateAudioTrack { it.copy(volume = v, isMuted = false) } },
                 valueRange = 0f..2f,
-                colors = SliderDefaults.colors(thumbColor = palette.audioAmber, activeTrackColor = palette.audioAmber),
-                modifier = Modifier.weight(1f).height(26.dp)
+                accentColor = palette.audioAmber,
+                defaultValue = 1.0f,
+                modifier = Modifier.weight(1f)
             )
-            Text("${(audio.volume * 100).roundToInt()}%", style = TimecodeTextStyle.copy(color = palette.audioAmber, fontSize = 11.sp))
+            Spacer(Modifier.width(8.dp))
+            Text("${(audio.volume * 100).roundToInt()}%", style = TimecodeTextStyle.copy(color = palette.audioAmber, fontSize = 11.sp), modifier = Modifier.width(42.dp))
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Fade In", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary, modifier = Modifier.width(54.dp))
-            Slider(
-                value = audio.fadeInMs.toFloat(),
+            StudioScrubSlider(
+                value = audio.fadeInMs.toFloat().coerceIn(0f, 3000f),
                 onValueChange = { v -> onUpdateAudioTrack { it.copy(fadeInMs = v.toLong()) } },
                 valueRange = 0f..3000f,
-                modifier = Modifier.weight(1f).height(26.dp)
+                defaultValue = 0f,
+                modifier = Modifier.weight(1f)
             )
-            Text("${String.format("%.1f", audio.fadeInMs / 1000f)}s", style = TimecodeTextStyle.copy(color = palette.textSecondary, fontSize = 10.sp))
+            Spacer(Modifier.width(8.dp))
+            Text("${String.format(Locale.US, "%.1f", audio.fadeInMs / 1000f)}s", style = TimecodeTextStyle.copy(color = palette.textSecondary, fontSize = 10.sp), modifier = Modifier.width(42.dp))
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Auto-Duck Video", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
-                Spacer(Modifier.width(6.dp))
-                Switch(
-                    checked = audio.duckOriginalAudio,
-                    onCheckedChange = { checked -> onUpdateAudioTrack { it.copy(duckOriginalAudio = checked) } }
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Loop", style = MaterialTheme.typography.labelSmall, color = palette.textSecondary)
-                Spacer(Modifier.width(6.dp))
-                Switch(
-                    checked = audio.isLooping,
-                    onCheckedChange = { checked -> onUpdateAudioTrack { it.copy(isLooping = checked) } }
-                )
-            }
+            StudioTogglePill(
+                label = "Auto-Duck Video",
+                checked = audio.duckOriginalAudio,
+                onCheckedChange = { checked -> onUpdateAudioTrack { it.copy(duckOriginalAudio = checked) } },
+                activeColor = palette.audioAmber
+            )
+            StudioTogglePill(
+                label = "Loop Track",
+                checked = audio.isLooping,
+                onCheckedChange = { checked -> onUpdateAudioTrack { it.copy(isLooping = checked) } },
+                activeColor = palette.playheadCyan
+            )
         }
     }
 }
@@ -504,27 +499,34 @@ fun CanvasRatioPanel(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("Canvas Aspect Ratio", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(AspectRatioPreset.entries) { preset ->
                 val selected = preset == currentRatio
                 Surface(
                     onClick = { onSelectRatio(preset) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(4.dp),
                     color = if (selected) palette.cyanMuted else palette.elevatedTrack,
                     modifier = Modifier
                         .border(
-                            width = if (selected) 1.5.dp else 1.dp,
+                            width = if (selected) 1.25.dp else 0.75.dp,
                             color = if (selected) palette.playheadCyan else palette.hairlineBorder,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(4.dp)
                         )
                         .testTag("ratio_option_${preset.label}")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(preset.label, style = MaterialTheme.typography.titleMedium, color = if (selected) palette.playheadCyan else palette.textPrimary)
-                        Text(preset.subtitle, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = palette.textSecondary)
+                        AspectRatioWireframeIcon(
+                            floatRatio = preset.floatRatio,
+                            tint = if (selected) palette.playheadCyan else palette.textSecondary
+                        )
+                        Column {
+                            Text(preset.label, style = MaterialTheme.typography.titleSmall, color = if (selected) palette.playheadCyan else palette.textPrimary)
+                            Text(preset.subtitle, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = palette.textSecondary)
+                        }
                     }
                 }
             }
@@ -533,20 +535,11 @@ fun CanvasRatioPanel(
         Text("Letterbox Backdrop", style = MaterialTheme.typography.labelMedium, color = palette.textSecondary)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(CanvasFillStyle.entries) { style ->
-                val selected = style == currentFill
-                FilterChip(
-                    selected = selected,
+                StudioOptionPill(
+                    label = style.label,
+                    selected = style == currentFill,
                     onClick = { onSelectFill(style) },
-                    leadingIcon = {
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clip(CircleShape)
-                                .background(Color(style.argb))
-                                .border(1.dp, palette.hairlineBorder, CircleShape)
-                        )
-                    },
-                    label = { Text(style.label, fontSize = 11.sp) }
+                    leadingDotColor = Color(style.argb)
                 )
             }
         }

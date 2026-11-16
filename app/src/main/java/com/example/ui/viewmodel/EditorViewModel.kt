@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 enum class EditorToolTab(val label: String) {
     EDIT("Cut"),
@@ -427,7 +428,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 if (summary.width > 0 && summary.height > 0) add("${summary.width}x${summary.height}")
                 summary.videoCodec?.let { add(it) }
                 if (summary.sampleRateHz > 0) add("${summary.sampleRateHz / 1000}kHz")
-                add("${String.format("%.2f", clip.effectiveSpeed * _monitorSpeed.value)}x")
+                add("${String.format(Locale.US, "%.2f", clip.effectiveSpeed * _monitorSpeed.value)}x")
             }
             _activeClipTelemetry.value = parts.joinToString(" • ").ifBlank { clip.displayName }
         }
@@ -581,8 +582,26 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
         _canUndo.value = undoStack.isNotEmpty()
         _canRedo.value = redoStack.isNotEmpty()
+        pruneUnusedFilmstrips(next.clips)
         syncPlayersToPlayhead(_playheadMs.value, shouldPlay = _isPlaying.value)
         schedulePersist(next)
+    }
+
+    private fun pruneUnusedFilmstrips(activeClips: List<VideoClip>) {
+        val activeIds = activeClips.mapTo(mutableSetOf()) { it.id }
+        val currentMap = _filmstrips.value
+        val staleIds = currentMap.keys.filterNot { it in activeIds }
+        if (staleIds.isNotEmpty()) {
+            val nextMap = currentMap.toMutableMap()
+            val stillInUse = mutableSetOf<Bitmap>()
+            activeIds.forEach { id -> currentMap[id]?.let { stillInUse.addAll(it) } }
+            staleIds.forEach { staleId ->
+                nextMap.remove(staleId)?.distinct()?.forEach { bmp ->
+                    if (bmp !in stillInUse && !bmp.isRecycled) bmp.recycle()
+                }
+            }
+            _filmstrips.value = nextMap
+        }
     }
 
     private fun updateUndoRedoFlags() {
@@ -1083,5 +1102,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         audioPlayers.values.forEach { it.release() }
         audioPlayers.clear()
         videoPlayer = null
+        _filmstrips.value.values.flatten().distinct().forEach { bmp ->
+            if (!bmp.isRecycled) bmp.recycle()
+        }
+        _filmstrips.value = emptyMap()
     }
 }

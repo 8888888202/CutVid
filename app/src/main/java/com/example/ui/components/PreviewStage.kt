@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.os.Build
 import android.view.TextureView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +30,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -49,7 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -69,11 +74,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import java.util.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -179,58 +186,125 @@ fun PreviewStage(
             .background(palette.voidBg),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Broadcast Monitor Telemetry Header
+        // Broadcast Monitor Telemetry & Utility Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(palette.studioSlate)
                 .border(0.5.dp, palette.hairlineBorder)
-                .padding(horizontal = 10.dp, vertical = 3.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .size(6.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
                         .background(if (isPlaying) palette.readyEmerald else palette.audioAmber)
                 )
                 Text(
                     text = telemetryText,
                     style = TimecodeTextStyle.copy(fontSize = 10.sp, color = palette.textSecondary),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                // Live compact VU activity meter
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    val activeLevel = if (isPlaying && monitorVolume > 0.05f) {
+                        (0.35f + 0.55f * abs(sin(playheadMs * 0.018))).toFloat() * monitorVolume
+                    } else 0.08f
+                    for (bar in 0 until 5) {
+                        val threshold = (bar + 1) / 5f
+                        val lit = activeLevel >= threshold - 0.12f
+                        Box(
+                            modifier = Modifier
+                                .width(2.5.dp)
+                                .height(8.dp)
+                                .background(
+                                    when {
+                                        !lit -> palette.elevatedTrack
+                                        bar >= 4 -> palette.cutCrimson
+                                        bar >= 3 -> palette.audioAmber
+                                        else -> palette.readyEmerald
+                                    }
+                                )
+                        )
+                    }
+                }
             }
 
-            // Live VU activity indicator
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val activeLevel = if (isPlaying && monitorVolume > 0.05f) {
-                    (0.35f + 0.55f * abs(sin(playheadMs * 0.018))).toFloat() * monitorVolume
-                } else 0.08f
-                for (bar in 0 until 6) {
-                    val threshold = (bar + 1) / 6f
-                    val lit = activeLevel >= threshold - 0.12f
-                    Box(
-                        modifier = Modifier
-                            .width(4.dp)
-                            .height(8.dp)
-                            .background(
-                                when {
-                                    !lit -> palette.elevatedTrack
-                                    bar >= 5 -> palette.cutCrimson
-                                    bar >= 4 -> palette.audioAmber
-                                    else -> palette.readyEmerald
-                                }
+                Surface(
+                    onClick = onCycleMonitorSpeed,
+                    shape = RoundedCornerShape(3.dp),
+                    color = if (monitorSpeed != 1.0f) palette.amberMuted else palette.elevatedTrack,
+                    modifier = Modifier
+                        .border(0.5.dp, if (monitorSpeed != 1.0f) palette.audioAmber else palette.hairlineBorder, RoundedCornerShape(3.dp))
+                        .testTag("monitor_speed_button")
+                ) {
+                    Text(
+                        text = "${String.format(Locale.US, "%.2g", monitorSpeed)}x",
+                        style = TimecodeTextStyle.copy(
+                            color = if (monitorSpeed != 1.0f) palette.audioAmber else palette.textSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+                Surface(
+                    onClick = onToggleStageFillMode,
+                    shape = RoundedCornerShape(3.dp),
+                    color = if (stageFillMode) palette.cyanMuted else palette.elevatedTrack,
+                    modifier = Modifier
+                        .border(0.5.dp, if (stageFillMode) palette.playheadCyan else palette.hairlineBorder, RoundedCornerShape(3.dp))
+                        .testTag("stage_fit_toggle_button")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AspectRatio,
+                            contentDescription = "Toggle fit or fill",
+                            tint = if (stageFillMode) palette.playheadCyan else palette.textSecondary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = if (stageFillMode) "FILL" else "FIT",
+                            style = TimecodeTextStyle.copy(
+                                fontSize = 9.sp,
+                                color = if (stageFillMode) palette.playheadCyan else palette.textSecondary
                             )
+                        )
+                    }
+                }
+                Surface(
+                    onClick = onCaptureSnapshot,
+                    shape = RoundedCornerShape(3.dp),
+                    color = palette.elevatedTrack,
+                    modifier = Modifier
+                        .border(0.5.dp, palette.hairlineBorder, RoundedCornerShape(3.dp))
+                        .testTag("stage_snapshot_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Save frame snapshot",
+                        tint = palette.textSecondary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp).size(13.dp)
                     )
                 }
             }
@@ -364,7 +438,14 @@ fun PreviewStage(
                     sin(playheadMs * 0.061).toFloat() * activeClip.fxIntensity * 14f
                 } else 0f
 
-                val layerModifier = Modifier
+                val hardwareGradeEffect = remember(grade) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && grade.isModified) {
+                        val nativeMatrix = android.graphics.ColorMatrix(Media3EffectFactory.colorMatrixPreviewMultiplier(grade))
+                        AndroidRenderEffect.createColorFilterEffect(ColorMatrixColorFilter(nativeMatrix)).asComposeRenderEffect()
+                    } else null
+                }
+
+                val transformModifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         rotationZ = activeClip?.rotationDegrees ?: 0f
@@ -375,10 +456,16 @@ fun PreviewStage(
                         alpha = animAlpha
                     }
 
+                val videoRenderModifier = if (hardwareGradeEffect != null) {
+                    transformModifier.graphicsLayer { renderEffect = hardwareGradeEffect }
+                } else {
+                    transformModifier
+                }
+
                 // Persistent TextureView prevents black-frame dropouts across Video <-> Freeze Frame cuts
                 var boundView: TextureView? = remember { null }
                 Box(
-                    modifier = layerModifier.alpha(if (activeClip == null || activeClip.isImage) 0f else 1f)
+                    modifier = videoRenderModifier.alpha(if (activeClip == null || activeClip.isImage) 0f else 1f)
                 ) {
                     AndroidView(
                         factory = { ctx ->
@@ -403,13 +490,13 @@ fun PreviewStage(
                             contentDescription = activeClip.displayName,
                             contentScale = if (stageFillMode) ContentScale.Crop else ContentScale.Fit,
                             colorFilter = if (grade.isModified) ColorFilter.colorMatrix(matrix) else null,
-                            modifier = layerModifier
+                            modifier = transformModifier
                         )
-                    } else if (grade.isModified) {
+                    } else if (grade.isModified && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                         val tintColor = when {
-                            grade.saturation <= -0.9f -> Color.Black.copy(alpha = 0.24f)
-                            grade.warmth > 0.08f -> palette.audioAmber.copy(alpha = (grade.warmth * 0.28f).coerceIn(0f, 0.22f))
-                            grade.warmth < -0.05f -> palette.playheadCyan.copy(alpha = (-grade.warmth * 0.25f).coerceIn(0f, 0.22f))
+                            grade.saturation <= -0.9f -> Color.Black.copy(alpha = 0.28f)
+                            grade.warmth > 0.08f -> palette.audioAmber.copy(alpha = (grade.warmth * 0.26f).coerceIn(0f, 0.20f))
+                            grade.warmth < -0.05f -> palette.playheadCyan.copy(alpha = (-grade.warmth * 0.24f).coerceIn(0f, 0.20f))
                             else -> Color.Transparent
                         }
                         if (tintColor != Color.Transparent) {
@@ -438,7 +525,7 @@ fun PreviewStage(
                                 VisualFxType.FILM_GRAIN -> {
                                     val a = (intensity * 0.22f).coerceIn(0.04f, 0.28f)
                                     val seed = (playheadMs / 60L).toInt()
-                                    for (i in 0 until 180) {
+                                    for (i in 0 until 72) {
                                         val x = (((i * 73 + seed * 19) % 997) / 997f) * size.width
                                         val y = (((i * 137 + seed * 31) % 991) / 991f) * size.height
                                         drawRect(
@@ -584,24 +671,27 @@ fun PreviewStage(
             }
         }
 
-        // Hardware Transport & Monitor Control Console
+        // Hardware Transport Control Bar (zero-overflow responsive across 320dp+ phones)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(palette.studioSlate)
                 .border(0.5.dp, palette.hairlineBorder)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.width(86.dp)) {
+            Column(modifier = Modifier.widthIn(min = 60.dp, max = 72.dp)) {
                 Text(
                     text = TimecodeFormatter.formatTimecode(playheadMs, project.exportSettings.fps),
-                    style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontWeight = FontWeight.Bold)
+                    style = TimecodeTextStyle.copy(color = palette.playheadCyan, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                    maxLines = 1
                 )
                 Text(
                     text = "/ ${TimecodeFormatter.formatTimecode(project.totalDurationMs, project.exportSettings.fps)}",
-                    style = TimecodeTextStyle.copy(color = palette.textMuted, fontSize = 10.sp)
+                    style = TimecodeTextStyle.copy(color = palette.textMuted, fontSize = 9.sp),
+                    maxLines = 1
                 )
             }
 
@@ -611,19 +701,19 @@ fun PreviewStage(
             ) {
                 IconButton(
                     onClick = onJumpToStart,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("jump_start_button")
+                    modifier = Modifier.size(40.dp).testTag("jump_start_button")
                 ) {
-                    Icon(Icons.Default.SkipPrevious, "Jump to start", tint = palette.textSecondary, modifier = Modifier.size(19.dp))
+                    Icon(Icons.Default.SkipPrevious, "Jump to start", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
                 }
                 IconButton(
                     onClick = { onStepFrame(-1) },
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("step_back_button")
+                    modifier = Modifier.size(40.dp).testTag("step_back_button")
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous frame", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous frame", tint = palette.textSecondary, modifier = Modifier.size(19.dp))
                 }
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(width = 40.dp, height = 32.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(palette.playheadCyan)
                         .clickable(onClick = onTogglePlay)
@@ -634,39 +724,21 @@ fun PreviewStage(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = palette.voidBg,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 IconButton(
                     onClick = { onStepFrame(1) },
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("step_forward_button")
+                    modifier = Modifier.size(40.dp).testTag("step_forward_button")
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next frame", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next frame", tint = palette.textSecondary, modifier = Modifier.size(19.dp))
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    onClick = onCycleMonitorSpeed,
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (monitorSpeed != 1.0f) palette.amberMuted else palette.elevatedTrack,
-                    modifier = Modifier
-                        .border(0.5.dp, if (monitorSpeed != 1.0f) palette.audioAmber else palette.hairlineBorder, RoundedCornerShape(4.dp))
-                        .testTag("monitor_speed_button")
-                ) {
-                    Text(
-                        text = "${monitorSpeed}x",
-                        style = TimecodeTextStyle.copy(
-                            color = if (monitorSpeed != 1.0f) palette.audioAmber else palette.textSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
-                }
                 IconButton(
                     onClick = onToggleMonitorMute,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("monitor_mute_button")
+                    modifier = Modifier.size(40.dp).testTag("monitor_mute_button")
                 ) {
                     Icon(
                         imageVector = if (monitorVolume < 0.05f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
@@ -676,25 +748,8 @@ fun PreviewStage(
                     )
                 }
                 IconButton(
-                    onClick = onToggleStageFillMode,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("stage_fit_toggle_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AspectRatio,
-                        contentDescription = "Toggle fit or fill",
-                        tint = if (stageFillMode) palette.playheadCyan else palette.textSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                IconButton(
-                    onClick = onCaptureSnapshot,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("stage_snapshot_button")
-                ) {
-                    Icon(Icons.Default.CameraAlt, "Save snapshot", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
-                }
-                IconButton(
                     onClick = onToggleLoop,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("loop_toggle_button")
+                    modifier = Modifier.size(40.dp).testTag("loop_toggle_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Repeat,
@@ -705,7 +760,7 @@ fun PreviewStage(
                 }
                 IconButton(
                     onClick = onToggleFullscreen,
-                    modifier = Modifier.minimumInteractiveComponentSize().testTag("fullscreen_toggle_button")
+                    modifier = Modifier.size(40.dp).testTag("fullscreen_toggle_button")
                 ) {
                     Icon(
                         imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
@@ -825,12 +880,13 @@ private fun DraggableTextOverlayBadge(
         val xPx = (overlay.normX * frameWpx).roundToInt()
         val yPx = (overlay.normY * frameHpx).roundToInt() + slideOffsetY
 
+        val boxWidthDp = with(LocalDensity.current) { (frameWpx * 0.56f).coerceAtLeast(80f).toDp() }
         Surface(
             color = if (overlay.hasBackground) Color(overlay.bgArgb) else Color.Transparent,
             shape = RoundedCornerShape(4.dp),
             modifier = Modifier
-                .offset { IntOffset(xPx - (frameWpx * 0.25f).roundToInt(), yPx - 36) }
-                .width((frameWpx * 0.5f).dp.value.let { (it / LocalDensity.current.density).dp })
+                .offset { IntOffset(xPx - (frameWpx * 0.28f).roundToInt(), yPx - 36) }
+                .width(boxWidthDp)
                 .graphicsLayer {
                     alpha = animAlpha
                     scaleX = animScale
@@ -867,28 +923,50 @@ private fun DraggableTextOverlayBadge(
 @Composable
 private fun EmptyStagePlaceholder(onAddClipsClick: () -> Unit) {
     val palette = LocalStudioPalette.current
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .clickable(onClick = onAddClipsClick)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.VideoLibrary,
-            contentDescription = "Add clips",
-            tint = palette.playheadCyan,
-            modifier = Modifier.size(38.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("NO MEDIA LOADED", style = TimecodeTextStyle.copy(color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Tap to import video or photo clips",
-            style = MaterialTheme.typography.bodySmall,
-            color = palette.textSecondary,
-            textAlign = TextAlign.Center
-        )
+        // Subtle hardware camera viewfinder corner brackets
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val bracket = 16.dp.toPx()
+            val stroke = 1.5.dp.toPx()
+            val c = palette.hairlineBorder
+            // TL
+            drawLine(c, Offset.Zero, Offset(bracket, 0f), stroke)
+            drawLine(c, Offset.Zero, Offset(0f, bracket), stroke)
+            // TR
+            drawLine(c, Offset(size.width - bracket, 0f), Offset(size.width, 0f), stroke)
+            drawLine(c, Offset(size.width, 0f), Offset(size.width, bracket), stroke)
+            // BL
+            drawLine(c, Offset(0f, size.height - bracket), Offset(0f, size.height), stroke)
+            drawLine(c, Offset(0f, size.height), Offset(bracket, size.height), stroke)
+            // BR
+            drawLine(c, Offset(size.width - bracket, size.height), Offset(size.width, size.height), stroke)
+            drawLine(c, Offset(size.width, size.height - bracket), Offset(size.width, size.height), stroke)
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.VideoLibrary,
+                contentDescription = "Add clips",
+                tint = palette.playheadCyan,
+                modifier = Modifier.size(34.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("TIMELINE EMPTY", style = TimecodeTextStyle.copy(color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tap stage to import clips or sample reel",
+                style = MaterialTheme.typography.bodySmall,
+                color = palette.textSecondary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
